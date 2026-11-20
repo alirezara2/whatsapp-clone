@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}چت | واتساپ کلون{% endblock %}
+
+{% block content %}
+<div class="app-container" id="appContainer">
+  <!-- سایدبار -->
+  <aside class="sidebar" id="sidebar">
+    <header class="sidebar-header">
+      <div class="d-flex align-items-center gap-2">
+        <img id="myAvatar" class="avatar" src="/static/img/default-avatar.png" alt="me">
+        <div>
+          <div id="myName" class="fw-bold small"></div>
+          <div id="myBio" class="text-muted" style="font-size:0.75rem"></div>
+        </div>
+      </div>
+      <div class="dropdown">
+        <button class="btn btn-sm btn-light" data-bs-toggle="dropdown">
+          <i class="bi bi-three-dots-vertical"></i>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item" href="#" id="btnNewGroup"><i class="bi bi-people"></i> گروه جدید</a></li>
+          <li><a class="dropdown-item" href="#" id="btnNewChannel"><i class="bi bi-megaphone"></i> کانال جدید</a></li>
+          <li><a class="dropdown-item" href="#" id="btnProfile"><i class="bi bi-person"></i> پروفایل</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item text-danger" href="#" id="btnLogout"><i class="bi bi-box-arrow-right"></i> خروج</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <div class="p-2">
+      <input type="text" class="form-control form-control-sm" id="searchChats" placeholder="جستجوی چت...">
+    </div>
+<div class="p-2">
+  <input type="text" class="form-control form-control-sm" id="searchChats" placeholder="جستجو...">
+</div>
+
+<!-- تب‌ها -->
+<ul class="nav nav-tabs nav-fill sidebar-tabs" id="sidebarTabs" role="tablist">
+  <li class="nav-item">
+    <button class="nav-link active" data-tab="chats" type="button">
+      <i class="bi bi-chat-dots"></i> چت‌ها
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-tab="users" type="button">
+      <i class="bi bi-people"></i> کاربران
+    </button>
+  </li>
+</ul>
+
+<!-- لیست چت‌ها -->
+<div class="chat-list" id="chatList">
+  <div class="text-center text-muted p-3 small">در حال بارگذاری...</div>
+</div>
+
+<!-- لیست کاربران -->
+<div class="chat-list d-none" id="userList">
+  <div class="text-center text-muted p-3 small">در حال بارگذاری...</div>
+</div>
+    <div class="chat-list" id="chatList">
+      <div class="text-center text-muted p-3 small">در حال بارگذاری...</div>
+    </div>
+  </aside>
+
+  <!-- پنجره چت -->
+  <main class="chat-window" id="chatWindow">
+    <div class="empty-chat" id="emptyChat">
+      <i class="bi bi-chat-dots" style="font-size:4rem;color:#25d366"></i>
+      <h5 class="mt-3">یک چت انتخاب کنید</h5>
+      <p class="text-muted small">یا مخاطب جدیدی اضافه کنید</p>
+    </div>
+
+    <div class="chat-active d-none" id="chatActive">
+      <header class="chat-header">
+        <button class="btn btn-sm btn-light d-md-none" id="btnBack"><i class="bi bi-arrow-right"></i></button>
+        <img id="chatAvatar" class="avatar" src="/static/img/default-avatar.png">
+        <div class="flex-grow-1">
+          <div id="chatTitle" class="fw-bold"></div>
+          <div id="chatSubtitle" class="text-muted small"></div>
+        </div>
+        <div id="typingIndicator" class="typing d-none">در حال نوشتن...</div>
+      </header>
+
+      <div class="messages" id="messages"></div>
+
+      <footer class="composer">
+        <input type="text" id="msgInput" class="form-control" placeholder="پیام خود را بنویسید...">
+        <button class="btn btn-success" id="btnSend"><i class="bi bi-send"></i></button>
+      </footer>
+    </div>
+  </main>
+</div>
+
+<!-- Modal ساخت گروه -->
+<div class="modal fade" id="groupModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">گروه جدید</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input class="form-control mb-2" id="groupName" placeholder="نام گروه">
+        <textarea class="form-control mb-2" id="groupDesc" placeholder="توضیحات (اختیاری)" rows="2"></textarea>
+        <input class="form-control mb-2" id="groupMembers" placeholder="آیدی اعضا با کاما: 2,3,4">
+        <div id="groupError" class="text-danger small"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">انصراف</button>
+        <button class="btn btn-success" id="btnCreateGroup">ساخت</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal ساخت کانال -->
+<div class="modal fade" id="channelModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">کانال جدید</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input class="form-control mb-2" id="channelName" placeholder="نام کانال">
+        <textarea class="form-control mb-2" id="channelDesc" placeholder="توضیحات (اختیاری)" rows="2"></textarea>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="channelPublic" checked>
+          <label class="form-check-label" for="channelPublic">کانال عمومی</label>
+        </div>
+        <div id="channelError" class="text-danger small mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">انصراف</button>
+        <button class="btn btn-success" id="btnCreateChannel">ساخت</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal پروفایل -->
+<div class="modal fade" id="profileModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">پروفایل من</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="text-center mb-3">
+          <img id="profileAvatar" class="avatar-lg" src="/static/img/default-avatar.png">
+          <input type="file" id="avatarInput" accept="image/*" class="form-control form-control-sm mt-2">
+        </div>
+        <input class="form-control mb-2" id="profileName" placeholder="نام">
+        <input class="form-control mb-2" id="profileBio" placeholder="بیو">
+        <div id="profileError" class="text-danger small"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">انصراف</button>
+        <button class="btn btn-success" id="btnSaveProfile">ذخیره</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/chat.js"></script>
+{% endblock %}

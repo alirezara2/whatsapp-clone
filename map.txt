@@ -1,0 +1,30 @@
+whatsapp-clone/
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── config.py
+│   ├── database.py
+│   ├── models/
+│   │   └── __init__.py
+│   ├── schemas/
+│   │   └── __init__.py
+│   ├── routers/
+│   │   └── __init__.py
+│   ├── services/
+│   │   └── __init__.py
+│   ├── utils/
+│   │   └── __init__.py
+│   ├── templates/
+│   └── static/
+│       ├── css/
+│       ├── js/
+│       └── uploads/
+│           ├── avatars/
+│           └── messages/
+│
+├── venv/
+├── .env
+├── .gitignore
+├── requirements.txt
+└── README.md
