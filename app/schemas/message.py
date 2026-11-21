@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from app.models.message import MessageType
 from app.schemas.user import UserPublic
 
@@ -10,11 +10,6 @@ class MessageCreate(BaseModel):
     file_url: str | None = None
     file_name: str | None = None
     reply_to_id: int | None = None
-
-    def validate_content(self):
-        if self.type == MessageType.TEXT and not self.content:
-            raise ValueError("متن پیام نمیتونه خالی باشه")
-        return self
 
 
 class MessageUpdate(BaseModel):
@@ -31,9 +26,9 @@ class MessagePublic(BaseModel):
     file_url: str | None = None
     file_name: str | None = None
     reply_to_id: int | None = None
-    is_edited: bool
-    is_deleted: bool
+    is_edited: bool = False
+    is_deleted: bool = False
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)

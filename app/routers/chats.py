@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,13 +12,13 @@ from app.schemas.user import UserPublic
 from app.utils.deps import get_current_user
 from app.services import message_service
 from app.services.chat_service import get_or_create_private_chat
+from app.services.upload import save_message_file
 
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
 
 def _build_chat_public(c: Chat, last, unread: int) -> ChatPublic:
-    """ساخت دستی ChatPublic تا از مشکل lazy-load جلوگیری بشه."""
     members_out = []
     for m in c.members:
         members_out.append(
@@ -79,7 +79,6 @@ async def open_private_chat(
     db: AsyncSession = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    """چت خصوصی با کاربر مشخص رو باز میکنه یا میسازه."""
     if user_id == current.id:
         raise HTTPException(400, "نمیتونی با خودت چت کنی")
 
@@ -100,6 +99,40 @@ async def open_private_chat(
     last = await message_service.get_last_message(db, c.id)
     unread = await message_service.get_unread_count(db, c.id, current.id)
     return _build_chat_public(c, last, unread)
+
+
+@router.post("/{chat_id}/upload", response_model=MessagePublic)
+async def upload_message_file(
+    chat_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    """آپلود عکس/فیلم/فایل و ساخت پیام + broadcast."""
+    if not await message_service.is_member(db, chat_id, current.id):
+        raise HTTPException(403, "شما عضو این چت نیستید")
+
+    url, original_name, mtype = await save_message_file(file)
+
+    from app.models.message import MessageType
+    msg = await message_service.create_message(
+        db,
+        chat_id=chat_id,
+        sender_id=current.id,
+        content=None,
+        msg_type=MessageType(mtype),
+        file_url=url,
+        file_name=original_name,
+    )
+    payload = MessagePublic.model_validate(msg)
+
+    # broadcast از طریق WebSocket
+    from app.services.ws_manager import manager
+    await manager.broadcast(
+        chat_id,
+        {"event": "new_message", "message": payload.model_dump(mode="json")},
+    )
+    return payload
 
 
 @router.get("/{chat_id}", response_model=ChatPublic)

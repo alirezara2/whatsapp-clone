@@ -30,7 +30,7 @@ async function api(path, opts = {}) {
       if (res.status === 401) { logout(); throw new Error('unauthorized'); }
       if (res.status === 204) return null;
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || `خطای ${res.status}`);
+      if (!res.ok) throw new Error(extractError(data, `خطای ${res.status}`));
       return data;
 }
 
@@ -60,6 +60,15 @@ function extractError(data, fallback = 'خطای نامشخص') {
       return fallback;
 }
 
+// پیش‌نمایش عکس
+window.__previewImage = function (url) {
+      const overlay = document.createElement('div');
+      overlay.className = 'img-preview-overlay';
+      overlay.innerHTML = `<img src="${url}">`;
+      overlay.addEventListener('click', () => overlay.remove());
+      document.body.appendChild(overlay);
+};
+
 // ---------- Profile ----------
 async function loadMe() {
       try {
@@ -86,13 +95,17 @@ function chatDisplayInfo(c) {
       const avatar = isPrivate
             ? (other?.user?.avatar || DEFAULT_AVATAR)
             : (c.avatar || DEFAULT_AVATAR);
-      const last = c.last_message
-            ? (c.last_message.is_deleted
-                  ? 'پیام حذف شد'
-                  : (c.last_message.type === 'system'
-                        ? c.last_message.content
-                        : (c.last_message.content || '📎 فایل')))
-            : 'بدون پیام';
+      let last = 'بدون پیام';
+      if (c.last_message) {
+            const lm = c.last_message;
+            if (lm.is_deleted) last = 'پیام حذف شد';
+            else if (lm.type === 'system') last = lm.content || '';
+            else if (lm.type === 'image') last = '📷 عکس';
+            else if (lm.type === 'video') last = '🎬 فیلم';
+            else if (lm.type === 'audio') last = '🎤 صدا';
+            else if (lm.type === 'file') last = '📎 فایل';
+            else last = lm.content || '';
+      }
       return { title, avatar, last, isPrivate, other };
 }
 
@@ -170,14 +183,10 @@ function renderUsers() {
 async function openChatWithUser(userId) {
       try {
             const chat = await api(`/chats/private/${userId}`, { method: 'POST' });
-            if (!state.chats.find(c => c.id === chat.id)) {
-                  state.chats.unshift(chat);
-            } else {
-                  const idx = state.chats.findIndex(c => c.id === chat.id);
-                  state.chats[idx] = chat;
-            }
+            const idx = state.chats.findIndex(c => c.id === chat.id);
+            if (idx === -1) state.chats.unshift(chat);
+            else state.chats[idx] = chat;
             await openChat(chat.id);
-            // برگردون تب به چت‌ها
             switchTab('chats');
       } catch (e) {
             alert(e.message);
@@ -203,7 +212,6 @@ async function openChat(chatId) {
             chat.type === 'group' ? `${chat.members.length} عضو` :
                   chat.type === 'channel' ? 'کانال' : '';
 
-      // لود پیام‌ها
       try {
             const msgs = await api(`/chats/${chatId}/messages?limit=50`);
             renderMessages(msgs);
@@ -212,18 +220,13 @@ async function openChat(chatId) {
                   `<div class="text-center text-muted p-3 small">خطا در بارگذاری پیام‌ها</div>`;
       }
 
-      // read
       api(`/chats/${chatId}/read`, { method: 'POST' }).catch(() => { });
-
-      // ws
       connectWs(chatId);
 
-      // active state
       document.querySelectorAll('.chat-item').forEach(el =>
             el.classList.toggle('active', Number(el.dataset.chatId) === chatId)
       );
 
-      // focus input
       setTimeout(() => document.getElementById('msgInput')?.focus(), 100);
 }
 
@@ -237,6 +240,7 @@ function renderMessages(msgs) {
 function buildMsgEl(m) {
       const div = document.createElement('div');
       div.className = 'msg';
+      if (m.id) div.dataset.mid = m.id;
 
       if (m.type === 'system' || m.sender_id === null) {
             div.classList.add('system');
@@ -253,9 +257,31 @@ function buildMsgEl(m) {
 
       div.classList.add(m.sender_id === me.id ? 'mine' : 'other');
       const showSender = state.currentChat?.type !== 'private' && m.sender_id !== me.id;
+
+      let mediaHtml = '';
+      if (m.file_url && m.type === 'image') {
+            mediaHtml = `<img class="media image" src="${m.file_url}" alt="عکس"
+                      onclick="window.__previewImage('${m.file_url}')">`;
+      } else if (m.file_url && m.type === 'video') {
+            mediaHtml = `<video class="media video" controls preload="metadata" src="${m.file_url}"></video>`;
+      } else if (m.file_url && m.type === 'audio') {
+            mediaHtml = `<audio controls src="${m.file_url}" style="width:100%;margin-bottom:4px"></audio>`;
+      } else if (m.file_url && m.type === 'file') {
+            const fname = m.file_name || 'فایل';
+            mediaHtml = `
+      <a class="file-link" href="${m.file_url}" download="${escapeHtml(fname)}" target="_blank">
+        <i class="bi bi-file-earmark-arrow-down"></i>
+        <div>
+          <div class="fname">${escapeHtml(fname)}</div>
+          <div class="fsize">دانلود فایل</div>
+        </div>
+      </a>`;
+      }
+
       div.innerHTML = `
     ${showSender ? `<div class="sender">${escapeHtml(m.sender?.name || 'کاربر')}</div>` : ''}
-    <div>${escapeHtml(m.content || '')}</div>
+    ${mediaHtml}
+    ${m.content ? `<div class="caption">${escapeHtml(m.content)}</div>` : ''}
     <div class="time">${timeStr(m.created_at)} ${m.is_edited ? '· ویرایش شد' : ''}</div>
   `;
       return div;
@@ -267,7 +293,7 @@ function connectWs(chatId) {
       const url = `${proto}://${location.host}/ws/chat/${chatId}?token=${token}`;
       state.ws = new WebSocket(url);
 
-      state.ws.onopen = () => { /* connected */ };
+      state.ws.onopen = () => { };
       state.ws.onmessage = (ev) => {
             let data;
             try { data = JSON.parse(ev.data); } catch { return; }
@@ -275,8 +301,14 @@ function connectWs(chatId) {
             if (data.event === 'new_message') {
                   if (state.currentChat?.id === chatId) {
                         const box = document.getElementById('messages');
-                        box.appendChild(buildMsgEl(data.message));
-                        box.scrollTop = box.scrollHeight;
+                        // چک تکراری
+                        if (data.message?.id && box.querySelector(`[data-mid="${data.message.id}"]`)) {
+                              // قبلاً اضافه شده
+                        } else {
+                              const el = buildMsgEl(data.message);
+                              box.appendChild(el);
+                              box.scrollTop = box.scrollHeight;
+                        }
                   }
                   loadChats();
             } else if (data.event === 'message_edited' || data.event === 'message_deleted') {
@@ -293,7 +325,7 @@ function connectWs(chatId) {
             }
       };
       state.ws.onclose = () => { state.ws = null; };
-      state.ws.onerror = () => { /* silent */ };
+      state.ws.onerror = () => { };
 }
 
 function closeWs() {
@@ -303,7 +335,7 @@ function closeWs() {
       }
 }
 
-// ---------- Send ----------
+// ---------- Send text ----------
 function sendMessage() {
       const input = document.getElementById('msgInput');
       const text = input.value.trim();
@@ -320,6 +352,56 @@ document.getElementById('msgInput').addEventListener('keydown', (e) => {
             sendMessage();
       } else if (state.ws && state.ws.readyState === WebSocket.OPEN) {
             state.ws.send(JSON.stringify({ action: 'typing' }));
+      }
+});
+
+// ---------- File upload ----------
+document.getElementById('btnAttach').addEventListener('click', () => {
+      document.getElementById('fileInput').click();
+});
+
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (!f || !state.currentChat) return;
+
+      const maxSize = 20 * 1024 * 1024;
+      if (f.size > maxSize) {
+            alert('حجم فایل بیش از ۲۰ مگابایت است');
+            e.target.value = '';
+            return;
+      }
+
+      const prog = document.createElement('div');
+      prog.className = 'upload-progress';
+      prog.innerHTML = `<i class="bi bi-arrow-up-circle"></i> در حال آپلود...`;
+      document.body.appendChild(prog);
+
+      try {
+            const fd = new FormData();
+            fd.append('file', f);
+            const res = await fetch(`/chats/${state.currentChat.id}/upload`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${token}` },
+                  body: fd,
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(extractError(data, `خطای ${res.status}`));
+
+            // WebSocket هم broadcast میکنه، ولی برای اطمینان چک تکراری میکنیم
+            if (state.currentChat?.id === data.chat_id) {
+                  const box = document.getElementById('messages');
+                  if (!box.querySelector(`[data-mid="${data.id}"]`)) {
+                        const el = buildMsgEl(data);
+                        box.appendChild(el);
+                        box.scrollTop = box.scrollHeight;
+                  }
+            }
+            loadChats();
+      } catch (err) {
+            alert(err.message);
+      } finally {
+            prog.remove();
+            e.target.value = '';
       }
 });
 
@@ -465,7 +547,6 @@ function logout() {
       window.location.href = '/login';
 }
 
-// ---------- Back (mobile) ----------
 document.getElementById('btnBack')?.addEventListener('click', () => {
       document.getElementById('appContainer').classList.remove('show-chat');
       closeWs();
